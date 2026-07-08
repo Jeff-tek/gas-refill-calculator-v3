@@ -1,0 +1,658 @@
+// app/page.tsx
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Flame,
+  AlertTriangle,
+  ReceiptText,
+  CalendarClock,
+  Share2,
+  Trash2,
+  Copy,
+  Printer,
+  Check,
+  CheckCircle,
+} from "lucide-react";
+import { fmt2, group, naira, kg, parseField } from "@/lib/precision";
+import {
+  loadHistory,
+  saveHistory,
+  loadGsp,
+  saveGsp,
+} from "@/lib/storage";
+import type { FillMode, Transaction } from "@/lib/types";
+
+const GSP_DEFAULT = "1700";
+
+/* ---- date helpers ---- */
+function revenueOf(t: Transaction): number {
+  return t.mode === "A" ? t.input : t.cost ?? t.input * t.gsp;
+}
+function dayKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+function dayLabel(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "2-digit",
+  });
+}
+function clockTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function txnText(t: Transaction): string {
+  return (
+    "GAS REFILL RECEIPT\n" +
+    "------------------------------\n" +
+    new Date(t.ts).toLocaleString() +
+    "\n" +
+    "Mode          : " +
+    (t.mode === "A" ? "Price paid" : "Kg wanted") +
+    "\n" +
+    "GSP           : " +
+    naira(t.gsp) +
+    "/kg\n" +
+    "Start (CSR)   : " +
+    kg(t.csr) +
+    " kg\n" +
+    (t.mode === "A"
+      ? "Amount paid   : " + naira(t.input)
+      : "Kg requested  : " + kg(t.input) + " kg") +
+    "\n" +
+    (t.mode === "A"
+      ? "Kg filled     : " + kg(t.filledKg) + " kg"
+      : "Cost          : " + naira(t.cost ?? 0)) +
+    "\n" +
+    "------------------------------\n" +
+    "FINAL READING : " +
+    kg(t.finalKg) +
+    " kg"
+  );
+}
+
+export default function Home() {
+  const [gsp, setGsp] = useState(GSP_DEFAULT);
+  const [csr, setCsr] = useState("");
+  const [amount, setAmount] = useState("");
+  const [mode, setMode] = useState<FillMode>("A");
+  const [history, setHistory] = useState<Transaction[]>([]);
+  const [receipt, setReceipt] = useState<Transaction | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [recorded, setRecorded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* hydrate from storage (client only) */
+  useEffect(() => {
+    setGsp(loadGsp(GSP_DEFAULT));
+    setHistory(loadHistory());
+  }, []);
+
+  /* persist GSP whenever it is a valid positive number */
+  useEffect(() => {
+    const g = parseField(gsp);
+    if (!g.empty && !g.nan && g.value > 0) saveGsp(String(g.value));
+  }, [gsp]);
+
+  function flashToast(msg: string) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  }
+
+  /* ---- compute derived state + validation ---- */
+  const calc = useMemo(() => {
+    const g = parseField(gsp);
+    const c = parseField(csr);
+    const a = parseField(amount);
+    const errs: string[] = [];
+    let gspInvalid = false;
+    let csrInvalid = false;
+    let amountInvalid = false;
+    let csrMsg = "";
+    let amountMsg = "";
+
+    if (g.empty) {
+      gspInvalid = true;
+      errs.push("GSP is required");
+    } else if (g.nan) {
+      gspInvalid = true;
+      errs.push("GSP must be a number");
+    } else if (g.value < 0) {
+      gspInvalid = true;
+      errs.push("GSP cannot be negative");
+    } else if (g.value === 0) {
+      gspInvalid = true;
+      errs.push("GSP cannot be 0 (division by zero)");
+    }
+
+    let csrVal = 0;
+    if (!c.empty) {
+      if (c.nan || c.value < 0) {
+        csrInvalid = true;
+        csrMsg = c.nan ? "Not a valid number" : "CSR cannot be negative";
+        errs.push("CSR is invalid");
+      } else {
+        csrVal = c.value;
+      }
+    }
+
+    const amtName = mode === "A" ? "Price" : "Kg";
+    if (a.empty) {
+      amountMsg = mode === "A" ? "Enter the price paid" : "Enter kg wanted";
+      errs.push(amtName + " is required");
+    } else if (a.nan || a.value < 0) {
+      amountInvalid = true;
+      amountMsg = a.nan ? "Not a valid number" : amtName + " cannot be negative";
+      errs.push(amtName + " is invalid");
+    }
+
+    if (errs.length) {
+      return {
+        ok: false as const,
+        errs,
+        gspInvalid,
+        csrInvalid,
+        amountInvalid,
+        csrMsg,
+        amountMsg,
+      };
+    }
+
+    let finalKg: number;
+    let filledKg: number;
+    let cost: number | undefined;
+    if (mode === "A") {
+      filledKg = a.value / g.value; // full precision
+      finalKg = csrVal + filledKg; // full precision
+    } else {
+      filledKg = a.value;
+      finalKg = csrVal + a.value;
+      cost = a.value * g.value; // full precision
+    }
+
+    return {
+      ok: true as const,
+      gsp: g.value,
+      csr: csrVal,
+      input: a.value,
+      finalKg,
+      filledKg,
+      cost,
+    };
+  }, [gsp, csr, amount, mode]);
+
+  /* ---- record ---- */
+  function record() {
+    if (!calc.ok) return;
+    const t: Transaction = {
+      ts: Date.now(),
+      gsp: calc.gsp,
+      csr: calc.csr,
+      mode,
+      input: calc.input,
+      finalKg: calc.finalKg,
+      filledKg: calc.filledKg,
+      cost: mode === "B" ? calc.cost : undefined,
+    };
+    const next = [t, ...history];
+    setHistory(next);
+    saveHistory(next);
+    setRecorded(true);
+    flashToast("Fill recorded");
+    setTimeout(() => setRecorded(false), 1100);
+  }
+
+  function deleteTxn(id: number) {
+    const t = history.find((x) => x.ts === id);
+    const label = t ? `${kg(t.finalKg)} kg fill` : "this entry";
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
+    const next = history.filter((x) => x.ts !== id);
+    setHistory(next);
+    saveHistory(next);
+    flashToast("Entry deleted");
+  }
+
+  function clearAll() {
+    if (!confirm("Clear ALL recorded transactions? This cannot be undone."))
+      return;
+    setHistory([]);
+    saveHistory([]);
+    flashToast("Log cleared");
+  }
+
+  /* ---- share (real Web Share API, clipboard fallback) ---- */
+  async function doShare(title: string, text: string) {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title, text });
+      } catch {
+        /* user cancelled */
+      }
+      return;
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        flashToast("Copied to clipboard");
+      } catch {
+        flashToast("Sharing not supported here");
+      }
+      return;
+    }
+    flashToast("Sharing not supported here");
+  }
+
+  function shareDay(k: string) {
+    const items = history
+      .filter((t) => dayKey(t.ts) === k)
+      .sort((a, b) => a.ts - b.ts);
+    if (!items.length) return;
+    let kgSum = 0;
+    let revSum = 0;
+    items.forEach((t) => {
+      kgSum += t.filledKg;
+      revSum += revenueOf(t);
+    });
+    const lines = items
+      .map((t, i) => {
+        const v = t.mode === "A" ? "paid " + naira(t.input) : kg(t.input) + " kg";
+        return `${i + 1}) ${clockTime(t.ts)}  ${v}  \u2192  ${kg(
+          t.filledKg
+        )} kg (final ${kg(t.finalKg)})`;
+      })
+      .join("\n");
+    const text =
+      "GAS REFILL \u2014 DAILY SUMMARY\n" +
+      dayLabel(items[0].ts) +
+      "\n" +
+      "------------------------------\n" +
+      "Fills         : " +
+      items.length +
+      "\n" +
+      "Kg dispensed  : " +
+      kg(kgSum) +
+      " kg\n" +
+      "Revenue       : " +
+      naira(revSum) +
+      "\n" +
+      "------------------------------\n" +
+      lines;
+    doShare("Gas Refill \u2014 Daily Summary", text);
+  }
+
+  /* ---- receipt modal ---- */
+  function openReceipt(t: Transaction) {
+    setReceipt(t);
+    setCopied(false);
+    requestAnimationFrame(() => dialogRef.current?.showModal());
+  }
+  function closeReceipt() {
+    dialogRef.current?.close();
+    setReceipt(null);
+  }
+  async function copyReceipt() {
+    if (!receipt) return;
+    try {
+      await navigator.clipboard.writeText(txnText(receipt));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /* ---- derived: today's summary + grouped log ---- */
+  const todayK = dayKey(Date.now());
+  const todayStats = useMemo(() => {
+    let kgSum = 0;
+    let revSum = 0;
+    let count = 0;
+    history.forEach((t) => {
+      if (dayKey(t.ts) === todayK) {
+        kgSum += t.filledKg;
+        revSum += revenueOf(t);
+        count++;
+      }
+    });
+    return { kgSum, revSum, count };
+  }, [history, todayK]);
+
+  const groups = useMemo(() => {
+    const order: string[] = [];
+    const byDay: Record<string, Transaction[]> = {};
+    history.forEach((t) => {
+      const k = dayKey(t.ts);
+      if (!byDay[k]) {
+        byDay[k] = [];
+        order.push(k);
+      }
+      byDay[k].push(t);
+    });
+    return order.map((k) => {
+      const items = byDay[k];
+      let kgSum = 0;
+      let revSum = 0;
+      items.forEach((t) => {
+        kgSum += t.filledKg;
+        revSum += revenueOf(t);
+      });
+      return { key: k, items, kgSum, revSum };
+    });
+  }, [history]);
+
+  const secondary = calc.ok
+    ? mode === "A"
+      ? { label: "Kg filled", value: kg(calc.filledKg) + " kg", isKg: true }
+      : { label: "Cost", value: naira(calc.cost ?? 0), isKg: false }
+    : { label: mode === "A" ? "Kg filled" : "Cost", value: "\u2014", isKg: mode === "A" };
+
+  return (
+    <div className="app">
+      <header className="mast">
+        <div className="brand">
+          <div className="glyph">
+            <Flame size={20} />
+          </div>
+          <div>
+            <h1>Gas Refill</h1>
+            <span>Scale &middot; Terminal</span>
+          </div>
+        </div>
+        <div className={"gsp-chip" + (calc.ok ? "" : calc.gspInvalid ? " invalid" : "")}>
+          <span className="k">GSP</span>
+          <span className="field">
+            <span className="nara">&#8358;</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={gsp}
+              onChange={(e) => setGsp(e.target.value)}
+              aria-label="General selling price per kg"
+            />
+          </span>
+          <span className="u">/kg</span>
+        </div>
+      </header>
+
+      <main>
+        <section className="console" aria-live="polite">
+          <div className="readout-label">
+            <span className={"dot" + (calc.ok ? "" : " err")} /> Expected Final Scale Reading
+          </div>
+          <div className="readout">
+            <span className={"num" + (calc.ok ? "" : " blocked")}>
+              {calc.ok ? kg(calc.finalKg) : "0.00"}
+            </span>
+            <span className="unit">kg</span>
+          </div>
+
+          <div className="secondary">
+            <span className="lab">{secondary.label}</span>
+            <span className={"val" + (secondary.isKg ? " kg" : "")}>{secondary.value}</span>
+          </div>
+
+          {!calc.ok && (
+            <div className="console-err">
+              <AlertTriangle size={15} />
+              <ul>
+                {calc.errs.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="controls">
+            <div className={"toggle" + (mode === "B" ? " mode-b" : "")} role="tablist" aria-label="Fill mode">
+              <div className="slider" />
+              <button
+                className={mode === "A" ? "active" : ""}
+                role="tab"
+                aria-selected={mode === "A"}
+                onClick={() => setMode("A")}
+              >
+                Price &#8358;
+              </button>
+              <button
+                className={mode === "B" ? "active" : ""}
+                role="tab"
+                aria-selected={mode === "B"}
+                onClick={() => setMode("B")}
+              >
+                Kg wanted
+              </button>
+            </div>
+
+            <div className="field-row">
+              <div className="field-grp">
+                <label className="lbl" htmlFor="csr">
+                  Current Scale Reading <span className="hint">defaults 0</span>
+                </label>
+                <div className={"inp" + (!calc.ok && calc.csrInvalid ? " invalid" : "")}>
+                  <input
+                    id="csr"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={csr}
+                    onChange={(e) => setCsr(e.target.value)}
+                  />
+                  <span className="suf">kg</span>
+                </div>
+                {!calc.ok && calc.csrMsg && <p className="err-msg">{calc.csrMsg}</p>}
+              </div>
+
+              <div className="field-grp">
+                <label className="lbl" htmlFor="amount">
+                  <span>{mode === "A" ? "Price customer pays" : "Kg customer wants"}</span>
+                </label>
+                <div className={"inp" + (!calc.ok && calc.amountInvalid ? " invalid" : "")}>
+                  {mode === "A" && <span className="pre">&#8358;</span>}
+                  <input
+                    id="amount"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                  {mode === "B" && <span className="suf">kg</span>}
+                </div>
+                {!calc.ok && calc.amountMsg && <p className="err-msg">{calc.amountMsg}</p>}
+              </div>
+            </div>
+
+            <button className="record" disabled={!calc.ok} onClick={record}>
+              <span>{recorded ? "Recorded \u2713" : "Record fill"}</span>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <aside className="ledger">
+        <div className="ledger-head">
+          <h2>Sales Log</h2>
+          {history.length > 0 && (
+            <button className="clr" onClick={clearAll}>
+              Clear all
+            </button>
+          )}
+        </div>
+
+        <div className="today">
+          <div className="today-head">
+            <span className="lbl">
+              <CalendarClock size={13} /> Today
+            </span>
+            <span className="date">
+              {new Date().toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "short",
+                day: "2-digit",
+              })}
+            </span>
+          </div>
+          <div className="stats">
+            <div className="stat">
+              <span className="n">{kg(todayStats.kgSum)}</span>
+              <span className="l">kg sold</span>
+            </div>
+            <div className="stat">
+              <span className="n rev">{naira(todayStats.revSum)}</span>
+              <span className="l">revenue</span>
+            </div>
+            <div className="stat">
+              <span className="n">{todayStats.count}</span>
+              <span className="l">fills</span>
+            </div>
+          </div>
+          <button className="today-share" onClick={() => shareDay(todayK)}>
+            <Share2 size={12} /> Share today&apos;s summary
+          </button>
+        </div>
+
+        {history.length === 0 ? (
+          <div className="empty">
+            <ReceiptText size={30} />
+            <p>
+              No fills recorded yet.
+              <br />
+              Recorded transactions appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="day-groups">
+            {groups.map((grp) => (
+              <div className="day-group" key={grp.key}>
+                <div className="day-head">
+                  <span className="dd">{dayLabel(grp.items[0].ts)}</span>
+                  <span className="sub">
+                    {grp.items.length} fills &middot; {kg(grp.kgSum)} kg &middot; {naira(grp.revSum)}
+                  </span>
+                  <button className="ds" title="Share day" onClick={() => shareDay(grp.key)}>
+                    <Share2 size={13} />
+                  </button>
+                </div>
+                <ul className="txn-list">
+                  {grp.items.map((t) => {
+                    const desc =
+                      t.mode === "A"
+                        ? `Paid ${naira(t.input)} @ ${naira(t.gsp)}/kg`
+                        : `${kg(t.input)} kg @ ${naira(t.gsp)}/kg`;
+                    return (
+                      <li className="txn" key={t.ts}>
+                        <button className="txn-main" onClick={() => openReceipt(t)}>
+                          <span className={"tag " + (t.mode === "A" ? "a" : "b")}>
+                            {t.mode === "A" ? "\u20A6" : "KG"}
+                          </span>
+                          <span className="mid">
+                            <span className="t">{clockTime(t.ts)}</span>
+                            <span className="d">{desc}</span>
+                          </span>
+                          <span className="fin">
+                            <span className="n">{kg(t.finalKg)}</span>
+                            <span className="u">KG FINAL</span>
+                          </span>
+                        </button>
+                        <button className="txn-del" title="Delete" onClick={() => deleteTxn(t.ts)}>
+                          <Trash2 size={15} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </aside>
+
+      <dialog ref={dialogRef} onClose={() => setReceipt(null)}>
+        {receipt && (
+          <div className="receipt">
+            <div className="rc-top">
+              <div className="k">Final Scale Reading</div>
+              <div className="big">
+                {kg(receipt.finalKg)} <small>kg</small>
+              </div>
+            </div>
+            <div className="rc-body">
+              <div className="rc-row">
+                <span className="k">Timestamp</span>
+                <span className="v">
+                  {new Date(receipt.ts).toLocaleString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </span>
+              </div>
+              <div className="rc-row">
+                <span className="k">Mode</span>
+                <span className="v">{receipt.mode === "A" ? "Price paid" : "Kg wanted"}</span>
+              </div>
+              <div className="rc-row">
+                <span className="k">GSP</span>
+                <span className="v">{naira(receipt.gsp)}/kg</span>
+              </div>
+              <div className="rc-row">
+                <span className="k">Start reading (CSR)</span>
+                <span className="v">{kg(receipt.csr)} kg</span>
+              </div>
+              <div className="rc-row">
+                <span className="k">{receipt.mode === "A" ? "Amount paid" : "Kg requested"}</span>
+                <span className="v">
+                  {receipt.mode === "A" ? naira(receipt.input) : kg(receipt.input) + " kg"}
+                </span>
+              </div>
+              <div className="rc-row">
+                <span className="k">{receipt.mode === "A" ? "Kg filled" : "Cost"}</span>
+                <span className="v">
+                  {receipt.mode === "A"
+                    ? kg(receipt.filledKg) + " kg"
+                    : naira(receipt.cost ?? 0)}
+                </span>
+              </div>
+              <div className="rc-row">
+                <span className="k">Final reading</span>
+                <span className="v">{kg(receipt.finalKg)} kg</span>
+              </div>
+            </div>
+            <div className="rc-actions">
+              <button onClick={copyReceipt}>
+                {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
+              </button>
+              <button onClick={() => doShare("Gas Refill Receipt", txnText(receipt))}>
+                <Share2 size={13} /> Share
+              </button>
+              <button onClick={() => window.print()}>
+                <Printer size={13} /> Print
+              </button>
+              <button className="close" onClick={closeReceipt}>
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </dialog>
+
+      <div className={"toast" + (toast ? " show" : "")}>
+        <CheckCircle size={15} />
+        <span>{toast}</span>
+      </div>
+    </div>
+  );
+}
