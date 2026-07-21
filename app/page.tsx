@@ -13,6 +13,8 @@ import {
   Printer,
   Check,
   CheckCircle,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { fmt2, group, naira, kg, parseField } from "@/lib/precision";
 import {
@@ -101,6 +103,7 @@ export default function Home() {
   const [mode, setMode] = useState<FillMode>("A");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [pendingPay, setPendingPay] = useState<PaymentMethod>("cash");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [history, setHistory] = useState<Transaction[]>([]);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -119,6 +122,11 @@ export default function Home() {
 
   /* hydrate from storage (client only) */
   useEffect(() => {
+    const savedTheme = localStorage.getItem("gasrefill_theme");
+    if (savedTheme === "light" || savedTheme === "dark") {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    }
     setGsp(loadGsp(GSP_DEFAULT));
     setHistory(loadHistory());
     const saved = loadBottles();
@@ -293,6 +301,14 @@ export default function Home() {
     setHistory([]);
     saveHistory([]);
     flashToast("Log cleared");
+  }
+
+  /* ---- theme ---- */
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("gasrefill_theme", next);
   }
 
   /* ---- bottle management ---- */
@@ -489,6 +505,9 @@ export default function Home() {
             </div>
           </div>
         )}
+        <button className="theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
       </header>
 
       <main>
