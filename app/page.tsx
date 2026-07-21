@@ -102,7 +102,6 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<FillMode>("A");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
-  const [pendingPay, setPendingPay] = useState<PaymentMethod>("cash");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [history, setHistory] = useState<Transaction[]>([]);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
@@ -242,7 +241,6 @@ export default function Home() {
   /* ---- record ---- */
   function record() {
     if (!calc.ok || !activeBottle) return;
-    setPendingPay("cash");
     requestAnimationFrame(() => payDialogRef.current?.showModal());
   }
 
@@ -369,14 +367,19 @@ export default function Home() {
     if (!items.length) return;
     let kgSum = 0;
     let revSum = 0;
+    let cashRev = 0;
+    let transferRev = 0;
     items.forEach((t) => {
       kgSum += t.filledKg;
       revSum += revenueOf(t);
+      if (t.paymentMethod === "transfer") transferRev += revenueOf(t);
+      else cashRev += revenueOf(t);
     });
     const lines = items
       .map((t, i) => {
         const v = t.mode === "A" ? "paid " + naira(t.input) : kg(t.input) + " kg";
-        return `${i + 1}) ${clockTime(t.ts)}  ${v}  \u2192  ${kg(
+        const p = t.paymentMethod === "transfer" ? " [Xfer]" : "";
+        return `${i + 1}) ${clockTime(t.ts)}${p}  ${v}  \u2192  ${kg(
           t.filledKg
         )} kg (final ${kg(t.finalKg)})`;
       })
@@ -394,6 +397,12 @@ export default function Home() {
       " kg\n" +
       "Revenue       : " +
       naira(revSum) +
+      "\n" +
+      "Cash          : " +
+      naira(cashRev) +
+      "\n" +
+      "Transfer      : " +
+      naira(transferRev) +
       "\n" +
       "------------------------------\n" +
       lines;
@@ -818,7 +827,7 @@ export default function Home() {
         {calc.ok && (
           <div className="receipt">
             <div className="pay-confirm">
-              <h2>Confirm Fill &amp; Payment</h2>
+              <h2>How did the customer pay?</h2>
               <div className="pc-summary">
                 <div className="pc-row">
                   <span className="k">Final reading</span>
@@ -834,24 +843,17 @@ export default function Home() {
                 </div>
               </div>
               <div className="pc-choices">
-                <button
-                  className={"pc-choice" + (pendingPay === "cash" ? " active" : "")}
-                  onClick={() => setPendingPay("cash")}
-                >
+                <button className="pc-choice" onClick={() => confirmRecord("cash")}>
                   <div className="pc-icon">&#x1F4B5;</div>
                   <div className="pc-label">Cash</div>
                 </button>
-                <button
-                  className={"pc-choice" + (pendingPay === "transfer" ? " active" : "")}
-                  onClick={() => setPendingPay("transfer")}
-                >
+                <button className="pc-choice" onClick={() => confirmRecord("transfer")}>
                   <div className="pc-icon">&#x1F4B1;</div>
                   <div className="pc-label">Transfer</div>
                 </button>
               </div>
-              <div className="pc-actions">
-                <button className="pc-cancel" onClick={() => payDialogRef.current?.close()}>Cancel</button>
-                <button className="pc-confirm" onClick={() => confirmRecord(pendingPay)}>Confirm &amp; Record</button>
+              <div style={{textAlign:"center",marginTop:"var(--sp-3)"}}>
+                <button style={{background:"none",border:"none",color:"var(--faint)",fontFamily:"inherit",fontSize:"0.68rem",cursor:"pointer",padding:"var(--sp-2)",letterSpacing:"0.04em"}} onClick={() => payDialogRef.current?.close()}>Cancel</button>
               </div>
             </div>
           </div>
