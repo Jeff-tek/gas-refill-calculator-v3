@@ -13,7 +13,6 @@ import {
   Printer,
   Check,
   CheckCircle,
-  FlaskConical,
 } from "lucide-react";
 import { fmt2, group, naira, kg, parseField } from "@/lib/precision";
 import {
@@ -83,12 +82,25 @@ function txnText(t: Transaction): string {
   );
 }
 
+function GasCylinder({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="3" width="10" height="18" rx="5" />
+      <rect x="10" y="1" width="4" height="3" rx="1" />
+      <rect x="9" y="3" width="6" height="2" rx="1" />
+      <line x1="12" y1="10" x2="12" y2="14" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+
 export default function Home() {
   const [gsp, setGsp] = useState(GSP_DEFAULT);
   const [csr, setCsr] = useState("");
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<FillMode>("A");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [pendingPay, setPendingPay] = useState<PaymentMethod>("cash");
   const [history, setHistory] = useState<Transaction[]>([]);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -99,6 +111,7 @@ export default function Home() {
   const [bottleCapacity, setBottleCapacity] = useState("55");
 
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const payDialogRef = useRef<HTMLDialogElement>(null);
   const bottleDialogRef = useRef<HTMLDialogElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -221,6 +234,12 @@ export default function Home() {
   /* ---- record ---- */
   function record() {
     if (!calc.ok || !activeBottle) return;
+    setPendingPay("cash");
+    requestAnimationFrame(() => payDialogRef.current?.showModal());
+  }
+
+  function confirmRecord(method: PaymentMethod) {
+    if (!calc.ok || !activeBottle) return;
     const t: Transaction = {
       ts: Date.now(),
       gsp: calc.gsp,
@@ -230,7 +249,7 @@ export default function Home() {
       finalKg: calc.finalKg,
       filledKg: calc.filledKg,
       cost: mode === "B" ? calc.cost : undefined,
-      paymentMethod,
+      paymentMethod: method,
       bottleId: activeBottle.id,
     };
     const next = [t, ...history];
@@ -248,6 +267,7 @@ export default function Home() {
     setRecorded(true);
     flashToast("Fill recorded");
     setTimeout(() => setRecorded(false), 1100);
+    payDialogRef.current?.close();
   }
 
   function deleteTxn(id: number) {
@@ -462,7 +482,7 @@ export default function Home() {
         </div>
         {activeBottle && (
           <div className="bottle-chip" onClick={openNewBottle} title="Start new bottle">
-            <FlaskConical size={16} />
+            <GasCylinder size={16} />
             <div className="bc-info">
               <span className="bc-name">{activeBottle.name}</span>
               <span className="bc-pct"><span>{kg(activeBottle.remaining)}</span> / {kg(activeBottle.capacity)} kg</span>
@@ -559,26 +579,6 @@ export default function Home() {
               </div>
             </div>
 
-            <div className={"pay-toggle" + (paymentMethod === "transfer" ? " pay-transfer" : "")} role="radiogroup" aria-label="Payment method">
-              <div className="pay-slider" />
-              <button
-                className={paymentMethod === "cash" ? "active" : ""}
-                role="radio"
-                aria-checked={paymentMethod === "cash"}
-                onClick={() => setPaymentMethod("cash")}
-              >
-                Cash
-              </button>
-              <button
-                className={paymentMethod === "transfer" ? "active" : ""}
-                role="radio"
-                aria-checked={paymentMethod === "transfer"}
-                onClick={() => setPaymentMethod("transfer")}
-              >
-                Transfer
-              </button>
-            </div>
-
             <button className="record" disabled={!calc.ok} onClick={record}>
               <span>{recorded ? "Recorded \u2713" : "Record fill"}</span>
             </button>
@@ -603,7 +603,7 @@ export default function Home() {
             <div className="bottle-card">
               <div className="bc-head">
                 <div className="bcl">
-                  <FlaskConical size={18} />
+                  <GasCylinder size={18} />
                   <div>
                     <div className="bcn">{activeBottle.name}</div>
                     <div className="bcs">Started {new Date(activeBottle.createdAt).toLocaleDateString()}</div>
@@ -790,6 +790,50 @@ export default function Home() {
               <button className="close" onClick={closeReceipt}>
                 Close
               </button>
+            </div>
+          </div>
+        )}
+      </dialog>
+
+      <dialog ref={payDialogRef} className="bottle-dialog">
+        {calc.ok && (
+          <div className="receipt">
+            <div className="pay-confirm">
+              <h2>Confirm Fill &amp; Payment</h2>
+              <div className="pc-summary">
+                <div className="pc-row">
+                  <span className="k">Final reading</span>
+                  <span className="v pay-highlight">{kg(calc.finalKg)} kg</span>
+                </div>
+                <div className="pc-row">
+                  <span className="k">{mode === "A" ? "Kg filled" : "Cost"}</span>
+                  <span className="v">{mode === "A" ? kg(calc.filledKg) + " kg" : naira(calc.cost ?? 0)}</span>
+                </div>
+                <div className="pc-row">
+                  <span className="k">Bottle</span>
+                  <span className="v">{activeBottle?.name ?? "\u2014"}</span>
+                </div>
+              </div>
+              <div className="pc-choices">
+                <button
+                  className={"pc-choice" + (pendingPay === "cash" ? " active" : "")}
+                  onClick={() => setPendingPay("cash")}
+                >
+                  <div className="pc-icon">&#x1F4B5;</div>
+                  <div className="pc-label">Cash</div>
+                </button>
+                <button
+                  className={"pc-choice" + (pendingPay === "transfer" ? " active" : "")}
+                  onClick={() => setPendingPay("transfer")}
+                >
+                  <div className="pc-icon">&#x1F4B1;</div>
+                  <div className="pc-label">Transfer</div>
+                </button>
+              </div>
+              <div className="pc-actions">
+                <button className="pc-cancel" onClick={() => payDialogRef.current?.close()}>Cancel</button>
+                <button className="pc-confirm" onClick={() => confirmRecord(pendingPay)}>Confirm &amp; Record</button>
+              </div>
             </div>
           </div>
         )}
