@@ -5,7 +5,7 @@
 // in-memory map so the app never crashes. On a normal browser
 // session everything persists across reloads and tab closes.
 
-import type { Transaction } from "./types";
+import type { Bottle, Transaction } from "./types";
 
 const mem: Record<string, string> = {};
 
@@ -62,4 +62,20 @@ export function loadGsp(fallback: string): string {
 
 export function saveGsp(v: string): void {
   setItem(LS_GSP, v);
+}
+
+export const LS_BOTTLES = "gasrefill_bottles_v1";
+
+export function loadBottles(): Bottle[] {
+  try {
+    const raw = getItem(LS_BOTTLES);
+    const parsed = raw ? (JSON.parse(raw) as Bottle[]) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveBottles(b: Bottle[]): void {
+  setItem(LS_BOTTLES, JSON.stringify(b));
 }

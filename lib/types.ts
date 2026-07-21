@@ -1,5 +1,15 @@
 // lib/types.ts
 export type FillMode = "A" | "B";
+export type PaymentMethod = "cash" | "transfer";
+
+export interface Bottle {
+  id: string;
+  name: string;
+  capacity: number;
+  remaining: number;
+  createdAt: number;
+  closedAt?: number;
+}
 
 export interface Transaction {
   /** Epoch ms; also used as the stable unique id for delete/lookup. */
@@ -18,4 +28,8 @@ export interface Transaction {
   filledKg: number;
   /** Cost in naira (Mode B only). */
   cost?: number;
+  /** Cash or transfer. */
+  paymentMethod: PaymentMethod;
+  /** Which bottle this fill belongs to. */
+  bottleId: string;
 }

@@ -82,6 +82,50 @@ body{
 .toggle button{position:relative;z-index:1;background:transparent;border:none;color:var(--muted);font-family:inherit;font-size:0.74rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:var(--sp-3);cursor:pointer;transition:color .2s var(--ease)}
 .toggle button.active{color:var(--cream)}
 
+.bottle-chip{display:flex;align-items:center;gap:var(--sp-3);background:var(--panel);border:1px solid var(--etch);border-radius:var(--r-sm);padding:var(--sp-2) var(--sp-3);cursor:pointer;transition:border-color .18s var(--ease)}
+.bottle-chip:hover{border-color:var(--flame-dim)}
+.bottle-chip svg{color:var(--flame-hi);flex-shrink:0}
+.bottle-chip .bc-info{display:flex;flex-direction:column;gap:1px}
+.bottle-chip .bc-name{font-size:0.64rem;font-weight:700;letter-spacing:0.06em;color:var(--cream);white-space:nowrap}
+.bottle-chip .bc-pct{font-size:0.56rem;letter-spacing:0.04em;color:var(--faint)}
+.bottle-chip .bc-pct span{color:var(--flame-hi);font-weight:700}
+
+.bottle-card{background:var(--panel-2);border:1px solid var(--etch);border-radius:var(--r);padding:var(--sp-4);margin-bottom:var(--sp-4)}
+.bottle-card .bc-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-bottom:var(--sp-3)}
+.bottle-card .bc-head .bcl{display:flex;align-items:center;gap:var(--sp-2)}
+.bottle-card .bc-head .bcl svg{color:var(--flame-hi)}
+.bottle-card .bc-head .bcl .bcn{font-size:0.7rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--cream)}
+.bottle-card .bc-head .bcl .bcs{font-size:0.56rem;color:var(--faint);letter-spacing:0.04em}
+.bottle-track{width:100%;height:18px;background:var(--panel);border:1px solid var(--etch);border-radius:var(--r-sm);overflow:hidden;position:relative}
+.bottle-track .bt-fill{height:100%;border-radius:var(--r-sm);transition:width .4s var(--ease);background:linear-gradient(90deg,var(--flame-dim),var(--flame))}
+.bottle-track .bt-fill.low{background:linear-gradient(90deg,var(--danger),oklch(0.66 0.18 27 / 0.6))}
+.bottle-track .bt-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:700;letter-spacing:0.04em;color:var(--cream);mix-blend-mode:overlay}
+.bottle-stats{display:flex;justify-content:space-between;margin-top:var(--sp-2);font-size:0.58rem;color:var(--faint);letter-spacing:0.04em}
+.bottle-stats span strong{color:var(--cream);font-weight:700}
+.bottle-stats .used{color:var(--flame-hi)}
+.bottle-new-btn{width:100%;margin-top:var(--sp-3);background:transparent;border:1px solid var(--etch);border-radius:var(--r-sm);color:var(--muted);font-family:inherit;font-size:0.62rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:var(--sp-3);cursor:pointer;transition:all .16s var(--ease);display:flex;align-items:center;justify-content:center;gap:6px}
+.bottle-new-btn:hover{border-color:var(--flame-dim);color:var(--flame-hi)}
+
+.bottle-dialog{max-width:380px}
+.bottle-dialog .bd-body{padding:var(--sp-6);display:flex;flex-direction:column;gap:var(--sp-4)}
+.bottle-dialog .bd-body h2{font-size:0.8rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--cream);text-align:center}
+.bottle-dialog .bd-field{display:flex;flex-direction:column;gap:var(--sp-2)}
+.bottle-dialog .bd-field label{font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted)}
+.bottle-dialog .bd-field input{background:var(--panel);border:1px solid var(--etch);border-radius:var(--r-sm);padding:var(--sp-3);color:var(--cream);font-family:inherit;font-size:0.9rem;outline:none;transition:border-color .18s var(--ease)}
+.bottle-dialog .bd-field input:focus{border-color:var(--flame)}
+.bd-actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2);padding:0 var(--sp-6) var(--sp-6)}
+.bd-actions button{padding:var(--sp-3);border-radius:var(--r-sm);font-family:inherit;font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all .16s var(--ease)}
+.bd-actions .bd-cancel{background:transparent;border:1px solid var(--etch);color:var(--faint)}
+.bd-actions .bd-cancel:hover{border-color:var(--line);color:var(--cream)}
+.bd-actions .bd-confirm{background:linear-gradient(180deg,var(--flame),var(--flame-dim));border:1px solid var(--flame-hi);color:oklch(0.15 0.02 250)}
+.bd-actions .bd-confirm:hover{filter:brightness(1.08)}
+
+.pay-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--panel);border:1px solid var(--etch);border-radius:var(--r-sm);padding:3px;position:relative;margin-bottom:var(--sp-4)}
+.pay-toggle .pay-slider{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);background:var(--etch);border:1px solid var(--line);border-radius:7px;transition:transform .28s var(--ease)}
+.pay-toggle.pay-transfer .pay-slider{transform:translateX(100%)}
+.pay-toggle button{position:relative;z-index:1;background:transparent;border:none;color:var(--faint);font-family:inherit;font-size:0.66rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:var(--sp-2);cursor:pointer;transition:color .2s var(--ease)}
+.pay-toggle button.active{color:var(--cream)}
+
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)}
 @media (max-width:520px){ .field-row{grid-template-columns:1fr} }
 .field-grp{margin-bottom:var(--sp-4)}
@@ -118,6 +162,11 @@ label.lbl .hint{color:var(--faint);letter-spacing:0.04em;text-transform:none;fon
 .stat .l{font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--faint)}
 .today-share{margin-top:var(--sp-3);width:100%;background:transparent;border:1px solid var(--flame-dim);border-radius:7px;color:var(--flame-hi);font-family:inherit;font-size:0.62rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:var(--sp-2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .16s var(--ease)}
 .today-share:hover{background:var(--flame-dim);color:var(--cream)}
+.pay-breakdown{display:flex;gap:var(--sp-4);margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--etch);flex-wrap:wrap}
+.pb-item{font-size:0.64rem;color:var(--muted);display:flex;align-items:center;gap:5px;letter-spacing:0.04em}
+.pb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pb-dot.cash{background:var(--amber)}
+.pb-dot.transfer{background:var(--flame)}
 
 .empty{text-align:center;padding:var(--sp-10) var(--sp-4);color:var(--faint)}
 .empty svg{color:var(--etch);margin:0 auto var(--sp-3)}
@@ -139,6 +188,7 @@ label.lbl .hint{color:var(--faint);letter-spacing:0.04em;text-transform:none;fon
 .txn .tag.b{background:var(--amber-dim);color:oklch(0.94 0.06 78)}
 .txn .mid{min-width:0}
 .txn .mid .t{font-size:0.64rem;color:var(--faint);letter-spacing:0.02em}
+.pay-indicator{display:flex;align-items:center;gap:4px}
 .txn .mid .d{font-size:0.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .txn .fin{text-align:right}
 .txn .fin .n{font-size:1.05rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--cream)}
@@ -167,6 +217,169 @@ dialog::backdrop{background:oklch(0.10 0.01 250 / 0.72);backdrop-filter:blur(2px
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--sp-3) var(--sp-4);font-size:0.72rem;color:var(--cream);letter-spacing:0.02em;box-shadow:0 20px 50px -20px oklch(0 0 0 / 0.8);opacity:0;pointer-events:none;transition:opacity .24s var(--ease), transform .24s var(--ease);z-index:50;display:flex;align-items:center;gap:8px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast svg{color:var(--flame-hi)}
+
+/* ══════════════════════════════════════════════════
+   Coinbase Design System Tokens (cb-*)
+   Source: DESIGN.md
+   Usage: var(--cb-{token-name})
+   ══════════════════════════════════════════════════ */
+:root {
+  /* ── Colors ── */
+  --cb-primary:              #0052ff;
+  --cb-primary-active:       #003ecc;
+  --cb-primary-disabled:     #a8b8cc;
+  --cb-ink:                  #0a0b0d;
+  --cb-body:                 #5b616e;
+  --cb-body-strong:          #0a0b0d;
+  --cb-muted:                #7c828a;
+  --cb-muted-soft:           #a8acb3;
+  --cb-hairline:             #dee1e6;
+  --cb-hairline-soft:        #eef0f3;
+  --cb-canvas:               #ffffff;
+  --cb-surface-soft:         #f7f7f7;
+  --cb-surface-card:         #ffffff;
+  --cb-surface-strong:       #eef0f3;
+  --cb-surface-dark:         #0a0b0d;
+  --cb-surface-dark-elevated:#16181c;
+  --cb-on-primary:           #ffffff;
+  --cb-on-dark:              #ffffff;
+  --cb-on-dark-soft:         #a8acb3;
+  --cb-semantic-up:          #05b169;
+  --cb-semantic-down:        #cf202f;
+  --cb-accent-yellow:        #f4b000;
+
+  /* ── Typography (font-family aliases) ── */
+  --cb-font-display: 'Coinbase Display', -apple-system, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --cb-font-sans:    'Coinbase Sans', -apple-system, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --cb-font-mono:    'Coinbase Mono', 'Coinbase Sans', 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* ── Border Radius ── */
+  --cb-rounded-none:  0px;
+  --cb-rounded-xs:    4px;
+  --cb-rounded-sm:    8px;
+  --cb-rounded-md:    12px;
+  --cb-rounded-lg:    16px;
+  --cb-rounded-xl:    24px;
+  --cb-rounded-pill:  100px;
+  --cb-rounded-full:  9999px;
+
+  /* ── Spacing ── */
+  --cb-sp-xxs:    4px;
+  --cb-sp-xs:     8px;
+  --cb-sp-sm:     12px;
+  --cb-sp-base:   16px;
+  --cb-sp-md:     20px;
+  --cb-sp-lg:     24px;
+  --cb-sp-xl:     32px;
+  --cb-sp-xxl:    48px;
+  --cb-sp-section: 96px;
+
+  /* ── Shadows ── */
+  --cb-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Utility classes for Coinbase components ── */
+
+/* Buttons */
+.cb-btn-primary {
+  background-color: var(--cb-primary);
+  color: var(--cb-on-primary);
+  border-radius: var(--cb-rounded-pill);
+  padding: 12px 20px;
+  height: 44px;
+  font-family: var(--cb-font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.cb-btn-primary:hover { background-color: var(--cb-primary-active); }
+.cb-btn-primary:disabled {
+  background-color: var(--cb-primary-disabled);
+  cursor: not-allowed;
+}
+
+.cb-btn-secondary-light {
+  background-color: var(--cb-surface-strong);
+  color: var(--cb-ink);
+  border-radius: var(--cb-rounded-pill);
+  padding: 12px 20px;
+  height: 44px;
+  font-family: var(--cb-font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+  border: none;
+  cursor: pointer;
+}
+
+.cb-btn-pill-cta {
+  background-color: var(--cb-primary);
+  color: var(--cb-on-primary);
+  border-radius: var(--cb-rounded-pill);
+  padding: 16px 32px;
+  height: 56px;
+  font-family: var(--cb-font-sans);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+  border: none;
+  cursor: pointer;
+}
+
+/* Cards */
+.cb-card-light {
+  background-color: var(--cb-canvas);
+  color: var(--cb-ink);
+  border-radius: var(--cb-rounded-xl);
+  padding: 32px;
+}
+
+.cb-card-dark {
+  background-color: var(--cb-surface-dark-elevated);
+  color: var(--cb-on-dark);
+  border-radius: var(--cb-rounded-xl);
+  padding: 32px;
+}
+
+/* Badge */
+.cb-badge-pill {
+  background-color: var(--cb-surface-strong);
+  color: var(--cb-ink);
+  border-radius: var(--cb-rounded-pill);
+  padding: 4px 12px;
+  font-family: var(--cb-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+/* Text Input */
+.cb-text-input {
+  background-color: var(--cb-canvas);
+  color: var(--cb-ink);
+  border-radius: var(--cb-rounded-md);
+  padding: 14px 16px;
+  height: 48px;
+  font-family: var(--cb-font-sans);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  border: 1px solid var(--cb-hairline);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.cb-text-input:focus {
+  border: 2px solid var(--cb-primary);
+}
+
+/* Price semantics */
+.cb-price-up   { color: var(--cb-semantic-up); font-family: var(--cb-font-mono); font-size: 18px; font-weight: 500; }
+.cb-price-down { color: var(--cb-semantic-down); font-family: var(--cb-font-mono); font-size: 18px; font-weight: 500; }
 
 @media print{
   body *{visibility:hidden}

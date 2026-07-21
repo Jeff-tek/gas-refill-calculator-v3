@@ -13,6 +13,7 @@ import {
   Printer,
   Check,
   CheckCircle,
+  FlaskConical,
 } from "lucide-react";
 import { fmt2, group, naira, kg, parseField } from "@/lib/precision";
 import {
@@ -20,8 +21,10 @@ import {
   saveHistory,
   loadGsp,
   saveGsp,
+  loadBottles,
+  saveBottles,
 } from "@/lib/storage";
-import type { FillMode, Transaction } from "@/lib/types";
+import type { Bottle, FillMode, PaymentMethod, Transaction } from "@/lib/types";
 
 const GSP_DEFAULT = "1700";
 
@@ -59,6 +62,9 @@ function txnText(t: Transaction): string {
     "GSP           : " +
     naira(t.gsp) +
     "/kg\n" +
+    "Payment       : " +
+    (t.paymentMethod === "transfer" ? "Transfer" : "Cash") +
+    "\n" +
     "Start (CSR)   : " +
     kg(t.csr) +
     " kg\n" +
@@ -82,19 +88,40 @@ export default function Home() {
   const [csr, setCsr] = useState("");
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<FillMode>("A");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [history, setHistory] = useState<Transaction[]>([]);
   const [receipt, setReceipt] = useState<Transaction | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [recorded, setRecorded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [bottles, setBottles] = useState<Bottle[]>([]);
+  const [newBottleName, setNewBottleName] = useState("");
+  const [bottleCapacity, setBottleCapacity] = useState("55");
 
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const bottleDialogRef = useRef<HTMLDialogElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeBottle = bottles.find((b) => b.closedAt === undefined) ?? null;
 
   /* hydrate from storage (client only) */
   useEffect(() => {
     setGsp(loadGsp(GSP_DEFAULT));
     setHistory(loadHistory());
+    const saved = loadBottles();
+    if (saved.length === 0) {
+      const def: Bottle = {
+        id: crypto.randomUUID(),
+        name: "Bottle #1",
+        capacity: 55,
+        remaining: 55,
+        createdAt: Date.now(),
+      };
+      setBottles([def]);
+      saveBottles([def]);
+    } else {
+      setBottles(saved);
+    }
   }, []);
 
   /* persist GSP whenever it is a valid positive number */
@@ -193,7 +220,7 @@ export default function Home() {
 
   /* ---- record ---- */
   function record() {
-    if (!calc.ok) return;
+    if (!calc.ok || !activeBottle) return;
     const t: Transaction = {
       ts: Date.now(),
       gsp: calc.gsp,
@@ -203,10 +230,21 @@ export default function Home() {
       finalKg: calc.finalKg,
       filledKg: calc.filledKg,
       cost: mode === "B" ? calc.cost : undefined,
+      paymentMethod,
+      bottleId: activeBottle.id,
     };
     const next = [t, ...history];
     setHistory(next);
     saveHistory(next);
+
+    const updatedBottles = bottles.map((b) =>
+      b.id === activeBottle.id
+        ? { ...b, remaining: Math.max(0, b.remaining - calc.filledKg) }
+        : b
+    );
+    setBottles(updatedBottles);
+    saveBottles(updatedBottles);
+
     setRecorded(true);
     flashToast("Fill recorded");
     setTimeout(() => setRecorded(false), 1100);
@@ -219,6 +257,13 @@ export default function Home() {
     const next = history.filter((x) => x.ts !== id);
     setHistory(next);
     saveHistory(next);
+    if (t) {
+      const updated = bottles.map((b) =>
+        b.id === t.bottleId ? { ...b, remaining: Math.min(b.capacity, b.remaining + t.filledKg) } : b
+      );
+      setBottles(updated);
+      saveBottles(updated);
+    }
     flashToast("Entry deleted");
   }
 
@@ -228,6 +273,35 @@ export default function Home() {
     setHistory([]);
     saveHistory([]);
     flashToast("Log cleared");
+  }
+
+  /* ---- bottle management ---- */
+  function openNewBottle() {
+    setNewBottleName("");
+    setBottleCapacity("55");
+    requestAnimationFrame(() => bottleDialogRef.current?.showModal());
+  }
+
+  function createBottle() {
+    const name = newBottleName.trim() || `Bottle #${bottles.length + 1}`;
+    const cap = parseField(bottleCapacity);
+    const capacity = cap.empty || cap.nan || cap.value <= 0 ? 55 : cap.value;
+    const now = Date.now();
+    const updated = bottles.map((b) =>
+      b.closedAt === undefined ? { ...b, closedAt: now } : b
+    );
+    const newB: Bottle = {
+      id: crypto.randomUUID(),
+      name,
+      capacity,
+      remaining: capacity,
+      createdAt: now,
+    };
+    const next = [...updated, newB];
+    setBottles(next);
+    saveBottles(next);
+    bottleDialogRef.current?.close();
+    flashToast(`Started "${name}"`);
   }
 
   /* ---- share (real Web Share API, clipboard fallback) ---- */
@@ -317,14 +391,18 @@ export default function Home() {
     let kgSum = 0;
     let revSum = 0;
     let count = 0;
+    let cashRev = 0;
+    let transferRev = 0;
     history.forEach((t) => {
       if (dayKey(t.ts) === todayK) {
         kgSum += t.filledKg;
         revSum += revenueOf(t);
         count++;
+        if (t.paymentMethod === "transfer") transferRev += revenueOf(t);
+        else cashRev += revenueOf(t);
       }
     });
-    return { kgSum, revSum, count };
+    return { kgSum, revSum, count, cashRev, transferRev };
   }, [history, todayK]);
 
   const groups = useMemo(() => {
@@ -382,6 +460,15 @@ export default function Home() {
           </span>
           <span className="u">/kg</span>
         </div>
+        {activeBottle && (
+          <div className="bottle-chip" onClick={openNewBottle} title="Start new bottle">
+            <FlaskConical size={16} />
+            <div className="bc-info">
+              <span className="bc-name">{activeBottle.name}</span>
+              <span className="bc-pct"><span>{kg(activeBottle.remaining)}</span> / {kg(activeBottle.capacity)} kg</span>
+            </div>
+          </div>
+        )}
       </header>
 
       <main>
@@ -472,6 +559,26 @@ export default function Home() {
               </div>
             </div>
 
+            <div className={"pay-toggle" + (paymentMethod === "transfer" ? " pay-transfer" : "")} role="radiogroup" aria-label="Payment method">
+              <div className="pay-slider" />
+              <button
+                className={paymentMethod === "cash" ? "active" : ""}
+                role="radio"
+                aria-checked={paymentMethod === "cash"}
+                onClick={() => setPaymentMethod("cash")}
+              >
+                Cash
+              </button>
+              <button
+                className={paymentMethod === "transfer" ? "active" : ""}
+                role="radio"
+                aria-checked={paymentMethod === "transfer"}
+                onClick={() => setPaymentMethod("transfer")}
+              >
+                Transfer
+              </button>
+            </div>
+
             <button className="record" disabled={!calc.ok} onClick={record}>
               <span>{recorded ? "Recorded \u2713" : "Record fill"}</span>
             </button>
@@ -488,6 +595,36 @@ export default function Home() {
             </button>
           )}
         </div>
+
+        {activeBottle && (() => {
+          const pct = activeBottle.capacity > 0 ? (activeBottle.remaining / activeBottle.capacity) * 100 : 0;
+          const used = activeBottle.capacity - activeBottle.remaining;
+          return (
+            <div className="bottle-card">
+              <div className="bc-head">
+                <div className="bcl">
+                  <FlaskConical size={18} />
+                  <div>
+                    <div className="bcn">{activeBottle.name}</div>
+                    <div className="bcs">Started {new Date(activeBottle.createdAt).toLocaleDateString()}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="bottle-track">
+                <div className={"bt-fill" + (pct < 20 ? " low" : "")} style={{width: pct + "%"}} />
+                <div className="bt-label">{Math.round(pct)}% remaining</div>
+              </div>
+              <div className="bottle-stats">
+                <span>Used <strong className="used">{kg(used)}</strong> kg</span>
+                <span>Left <strong>{kg(activeBottle.remaining)}</strong> kg</span>
+                <span>Capacity <strong>{kg(activeBottle.capacity)}</strong> kg</span>
+              </div>
+              <button className="bottle-new-btn" onClick={openNewBottle}>
+                + New Bottle
+              </button>
+            </div>
+          );
+        })()}
 
         <div className="today">
           <div className="today-head">
@@ -515,6 +652,10 @@ export default function Home() {
               <span className="n">{todayStats.count}</span>
               <span className="l">fills</span>
             </div>
+          </div>
+          <div className="pay-breakdown">
+            <span className="pb-item"><span className="pb-dot cash" /> Cash {naira(todayStats.cashRev)}</span>
+            <span className="pb-item"><span className="pb-dot transfer" /> Transfer {naira(todayStats.transferRev)}</span>
           </div>
           <button className="today-share" onClick={() => shareDay(todayK)}>
             <Share2 size={12} /> Share today&apos;s summary
@@ -549,6 +690,7 @@ export default function Home() {
                       t.mode === "A"
                         ? `Paid ${naira(t.input)} @ ${naira(t.gsp)}/kg`
                         : `${kg(t.input)} kg @ ${naira(t.gsp)}/kg`;
+                    const payIcon = t.paymentMethod === "transfer" ? "\u2192" : "\u25CF";
                     return (
                       <li className="txn" key={t.ts}>
                         <button className="txn-main" onClick={() => openReceipt(t)}>
@@ -556,7 +698,7 @@ export default function Home() {
                             {t.mode === "A" ? "\u20A6" : "KG"}
                           </span>
                           <span className="mid">
-                            <span className="t">{clockTime(t.ts)}</span>
+                            <span className="t pay-indicator">{payIcon} {clockTime(t.ts)}</span>
                             <span className="d">{desc}</span>
                           </span>
                           <span className="fin">
@@ -605,6 +747,10 @@ export default function Home() {
                 <span className="v">{receipt.mode === "A" ? "Price paid" : "Kg wanted"}</span>
               </div>
               <div className="rc-row">
+                <span className="k">Payment</span>
+                <span className="v" style={{textTransform:"capitalize"}}>{receipt.paymentMethod ?? "Cash"}</span>
+              </div>
+              <div className="rc-row">
                 <span className="k">GSP</span>
                 <span className="v">{naira(receipt.gsp)}/kg</span>
               </div>
@@ -647,6 +793,40 @@ export default function Home() {
             </div>
           </div>
         )}
+      </dialog>
+
+      <dialog ref={bottleDialogRef} className="bottle-dialog">
+        <div className="receipt">
+          <div className="bd-body">
+            <h2>Start New Bottle</h2>
+            <div className="bd-field">
+              <label htmlFor="bottle-name">Bottle Name</label>
+              <input
+                id="bottle-name"
+                type="text"
+                placeholder={`Bottle #${bottles.length + 1}`}
+                value={newBottleName}
+                onChange={(e) => setNewBottleName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="bd-field">
+              <label htmlFor="bottle-cap">Capacity (kg)</label>
+              <input
+                id="bottle-cap"
+                type="text"
+                inputMode="decimal"
+                placeholder="55"
+                value={bottleCapacity}
+                onChange={(e) => setBottleCapacity(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="bd-actions">
+            <button className="bd-cancel" onClick={() => bottleDialogRef.current?.close()}>Cancel</button>
+            <button className="bd-confirm" onClick={createBottle}>Start Bottle</button>
+          </div>
+        </div>
       </dialog>
 
       <div className={"toast" + (toast ? " show" : "")}>
