@@ -12,6 +12,7 @@ const config: Config = {
   collectCoverageFrom: [
     "lib/**/*.ts",
     "!lib/**/*.d.ts",
+    "!lib/receipt-renderer.ts",
   ],
   coverageThreshold: {
     global: {

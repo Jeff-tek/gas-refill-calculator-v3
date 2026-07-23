@@ -44,6 +44,7 @@ import Dashboard from "@/components/Dashboard";
 import BusinessSettingsDialog from "@/components/BusinessSettings";
 import ExpenseTracker from "@/components/ExpenseTracker";
 import DataManagement from "@/components/DataManagement";
+import BottleSummary from "@/components/BottleSummary";
 
 const GSP_DEFAULT = "1700";
 
@@ -138,6 +139,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [showExpenses, setShowExpenses] = useState(false);
   const [showDataMgmt, setShowDataMgmt] = useState(false);
+  const [summaryBottle, setSummaryBottle] = useState<Bottle | null>(null);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const payDialogRef = useRef<HTMLDialogElement>(null);
@@ -352,6 +354,7 @@ export default function Home() {
     const cap = parseField(bottleCapacity);
     const capacity = cap.empty || cap.nan || cap.value <= 0 ? 55 : cap.value;
     const now = Date.now();
+    const closedBottle = bottles.find((b) => b.closedAt === undefined);
     const updated = bottles.map((b) =>
       b.closedAt === undefined ? { ...b, closedAt: now } : b
     );
@@ -366,6 +369,9 @@ export default function Home() {
     setBottles(next);
     saveBottles(next);
     bottleDialogRef.current?.close();
+    if (closedBottle) {
+      setSummaryBottle({ ...closedBottle, closedAt: now });
+    }
     flashToast(`Started "${name}"`);
   }
 
@@ -391,53 +397,88 @@ export default function Home() {
     flashToast("Sharing not supported here");
   }
 
-  function shareDay(k: string) {
+  async function shareDay(k: string) {
     const items = history
       .filter((t) => dayKey(t.ts) === k)
       .sort((a, b) => a.ts - b.ts);
     if (!items.length) return;
-    let kgSum = 0;
-    let revSum = 0;
-    let cashRev = 0;
-    let transferRev = 0;
-    items.forEach((t) => {
-      kgSum += t.filledKg;
-      revSum += revenueOf(t);
-      if (t.paymentMethod === "transfer") transferRev += revenueOf(t);
-      else cashRev += revenueOf(t);
-    });
-    const lines = items
-      .map((t, i) => {
-        const v = t.mode === "A" ? "paid " + naira(t.input) : kg(t.input) + " kg";
-        const p = t.paymentMethod === "transfer" ? " [Xfer]" : "";
-        return `${i + 1}) ${clockTime(t.ts)}${p}  ${v}  \u2192  ${kg(
-          t.filledKg
-        )} kg (final ${kg(t.finalKg)})`;
-      })
-      .join("\n");
-    const text =
-      "GAS REFILL \u2014 DAILY SUMMARY\n" +
-      dayLabel(items[0].ts) +
-      "\n" +
-      "------------------------------\n" +
-      "Fills         : " +
-      items.length +
-      "\n" +
-      "Kg dispensed  : " +
-      kg(kgSum) +
-      " kg\n" +
-      "Revenue       : " +
-      naira(revSum) +
-      "\n" +
-      "Cash          : " +
-      naira(cashRev) +
-      "\n" +
-      "Transfer      : " +
-      naira(transferRev) +
-      "\n" +
-      "------------------------------\n" +
-      lines;
-    doShare("Gas Refill \u2014 Daily Summary", text);
+
+    // Generate a non-editable receipt image
+    try {
+      const { renderDailyReceipt } = await import("@/lib/receipt-renderer");
+      const blob = await renderDailyReceipt(
+        items,
+        bizSettings?.businessName ?? "Gas Refill Terminal",
+        dayLabel(items[0].ts),
+        bizSettings?.receiptFooter ?? undefined
+      );
+
+      // Share as image via Web Share API
+      if (typeof navigator !== "undefined" && navigator.share) {
+        const file = new File([blob], `daily-summary-${k}.png`, { type: "image/png" });
+        try {
+          await navigator.share({
+            title: "Daily Sales Summary",
+            files: [file],
+          });
+          return;
+        } catch {
+          // fall through to clipboard fallback
+        }
+      }
+
+      // Fallback: download the image
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `daily-summary-${k}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      flashToast("Receipt image downloaded");
+    } catch (err) {
+      // Fallback to text-based share if canvas fails
+      flashToast("Generating receipt...");
+      let kgSum = 0;
+      let revSum = 0;
+      let cashRev = 0;
+      let transferRev = 0;
+      items.forEach((t) => {
+        kgSum += t.filledKg;
+        revSum += revenueOf(t);
+        if (t.paymentMethod === "transfer") transferRev += revenueOf(t);
+        else cashRev += revenueOf(t);
+      });
+      const lines = items
+        .map((t, i) => {
+          const v = t.mode === "A" ? "paid " + naira(t.input) : kg(t.input) + " kg";
+          const p = t.paymentMethod === "transfer" ? " [Xfer]" : "";
+          return `${i + 1}) ${clockTime(t.ts)}${p}  ${v}  \u2192  ${kg(t.filledKg)} kg (final ${kg(t.finalKg)})`;
+        })
+        .join("\n");
+      const text =
+        "GAS REFILL \u2014 DAILY SUMMARY\n" +
+        dayLabel(items[0].ts) +
+        "\n" +
+        "------------------------------\n" +
+        "Fills         : " +
+        items.length +
+        "\n" +
+        "Kg dispensed  : " +
+        kg(kgSum) +
+        " kg\n" +
+        "Revenue       : " +
+        naira(revSum) +
+        "\n" +
+        "Cash          : " +
+        naira(cashRev) +
+        "\n" +
+        "Transfer      : " +
+        naira(transferRev) +
+        "\n" +
+        "------------------------------\n" +
+        lines;
+      doShare("Gas Refill \u2014 Daily Summary", text);
+    }
   }
 
   /* ---- receipt modal ---- */
@@ -945,6 +986,8 @@ export default function Home() {
           transactions={history}
           expenses={expenses}
           costPricePerKg={costPricePerKg}
+          bottles={bottles}
+          activeBottleId={activeBottle?.id ?? null}
           onClose={() => setShowDashboard(false)}
         />
       )}
@@ -969,6 +1012,17 @@ export default function Home() {
             setBottles(loadBottles());
             setExpenses(loadExpenses());
           }}
+        />
+      )}
+
+      {/* Bottle Summary Dialog */}
+      {summaryBottle && (
+        <BottleSummary
+          bottle={summaryBottle}
+          transactions={history}
+          expenses={expenses}
+          costPricePerKg={costPricePerKg}
+          onClose={() => setSummaryBottle(null)}
         />
       )}
 

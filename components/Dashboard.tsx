@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect } from "react";
-import type { Transaction, Expense } from "@/lib/types";
+import type { Transaction, Expense, Bottle } from "@/lib/types";
 import { naira, kg } from "@/lib/precision";
 import { BarChart, X } from "lucide-react";
 
@@ -10,18 +10,34 @@ interface Props {
   transactions: Transaction[];
   expenses: Expense[];
   costPricePerKg: number;
+  bottles: Bottle[];
+  activeBottleId: string | null;
   onClose: () => void;
 }
 
 type Period = "7d" | "30d" | "90d" | "all";
+type BottleFilter = "all" | "active" | string; // "all", "active", or specific bottleId
 
 function revenueOf(t: Transaction): number {
   return t.mode === "A" ? t.input : (t.cost ?? t.input * t.gsp);
 }
 
-export default function Dashboard({ transactions, expenses, costPricePerKg, onClose }: Props) {
+function GasCylinder({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="3" width="10" height="18" rx="5" />
+      <rect x="10" y="1" width="4" height="3" rx="1" />
+      <rect x="9" y="3" width="6" height="2" rx="1" />
+      <line x1="12" y1="10" x2="12" y2="14" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+
+export default function Dashboard({ transactions, expenses, costPricePerKg, bottles, activeBottleId, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [period, setPeriod] = useState<Period>("7d");
+  const [bottleFilter, setBottleFilter] = useState<BottleFilter>("active");
 
   /** Stable midnight-aligned reference for period filtering.
    *  Initialized once on mount so period boundaries are clean
@@ -42,15 +58,33 @@ export default function Dashboard({ transactions, expenses, costPricePerKg, onCl
     return now - days * 86400000;
   }, [period, now]);
 
-  const filteredTxs = useMemo(
-    () => transactions.filter((t) => t.ts >= periodCutoff),
-    [transactions, periodCutoff]
-  );
+  const filteredTxs = useMemo(() => {
+    let txns = transactions.filter((t) => t.ts >= periodCutoff);
+    if (bottleFilter !== "all") {
+      const targetId = bottleFilter === "active" ? activeBottleId : bottleFilter;
+      if (targetId) {
+        txns = txns.filter((t) => t.bottleId === targetId);
+      }
+    }
+    return txns;
+  }, [transactions, periodCutoff, bottleFilter, activeBottleId]);
 
-  const filteredExpenses = useMemo(
-    () => expenses.filter((e) => e.date >= periodCutoff),
-    [expenses, periodCutoff]
-  );
+  const filteredExpenses = useMemo(() => {
+    let exps = expenses.filter((e) => e.date >= periodCutoff);
+    // For bottle-specific view, filter expenses to the bottle's lifespan
+    if (bottleFilter !== "all") {
+      const targetId = bottleFilter === "active" ? activeBottleId : bottleFilter;
+      if (targetId) {
+        const bottle = bottles.find((b) => b.id === targetId);
+        if (bottle) {
+          const start = bottle.createdAt;
+          const end = bottle.closedAt ?? Date.now();
+          exps = exps.filter((e) => e.date >= start && e.date <= end);
+        }
+      }
+    }
+    return exps;
+  }, [expenses, periodCutoff, bottleFilter, activeBottleId, bottles]);
 
   const stats = useMemo(() => {
     let totalKg = 0;
@@ -116,6 +150,50 @@ export default function Dashboard({ transactions, expenses, costPricePerKg, onCl
             <X size={14} />
           </button>
         </div>
+
+        {/* Bottle Filter */}
+        {bottles.length > 0 && (
+          <div className="dash-bottle-filter">
+            <GasCylinder size={14} />
+            <select
+              value={bottleFilter}
+              onChange={(e) => setBottleFilter(e.target.value as BottleFilter)}
+              className="dash-bottle-select"
+            >
+              <option value="active">Active Bottle</option>
+              {bottles.filter(b => b.closedAt).map((b) => (
+                <option key={b.id} value={b.id}>{b.name} (closed)</option>
+              ))}
+              <option value="all">All Bottles</option>
+            </select>
+          </div>
+        )}
+
+        {/* Bottle Info when filtered */}
+        {bottleFilter !== "all" && (() => {
+          const targetId = bottleFilter === "active" ? activeBottleId : bottleFilter;
+          const bottle = targetId ? bottles.find((b) => b.id === targetId) : null;
+          if (!bottle) return null;
+          const used = bottle.capacity - bottle.remaining;
+          const pct = bottle.capacity > 0 ? (bottle.remaining / bottle.capacity) * 100 : 0;
+          return (
+            <div className="dash-bottle-info">
+              <div className="dash-bi-head">
+                <GasCylinder size={16} />
+                <span>{bottle.name}</span>
+                <span className="dash-bi-status">{bottle.closedAt ? "Closed" : "Active"}</span>
+              </div>
+              <div className="dash-bi-track">
+                <div className="dash-bi-fill" style={{width: pct + "%"}} />
+              </div>
+              <div className="dash-bi-stats">
+                <span>Used <strong>{kg(used)}</strong> kg</span>
+                <span>Left <strong>{kg(bottle.remaining)}</strong> kg</span>
+                <span>Capacity <strong>{kg(bottle.capacity)}</strong> kg</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* KPI Cards */}
         <div className="dash-kpis">
