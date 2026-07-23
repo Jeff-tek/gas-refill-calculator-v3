@@ -1,7 +1,7 @@
 // components/DataManagement.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { exportBackupData, importBackupData, clearAllData } from "@/lib/storage";
 import { Database, Download, Upload, Trash2, Check, AlertTriangle, X } from "lucide-react";
 
@@ -17,9 +17,9 @@ export default function DataManagement({ onClose, onDataChanged }: Props) {
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useState(() => {
+  useEffect(() => {
     ref.current?.showModal();
-  });
+  }, []);
 
   function flash(msg: string) {
     setStatus(msg);

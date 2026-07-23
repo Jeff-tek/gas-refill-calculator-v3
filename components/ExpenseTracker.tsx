@@ -1,7 +1,7 @@
 // components/ExpenseTracker.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Expense, ExpenseCategory } from "@/lib/types";
 import { loadExpenses, saveExpenses } from "@/lib/storage";
 import { fmt2, group, naira } from "@/lib/precision";
@@ -29,9 +29,9 @@ export default function ExpenseTracker({ onClose }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useState(() => {
+  useEffect(() => {
     ref.current?.showModal();
-  });
+  }, []);
 
   function flash(msg: string) {
     setToast(msg);

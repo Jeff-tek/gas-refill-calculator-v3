@@ -1,7 +1,7 @@
 // components/BusinessSettings.tsx
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { loadSettings, saveSettings, loadCostPrice, saveCostPrice } from "@/lib/storage";
 import type { BusinessSettings } from "@/lib/types";
 import { Settings, X } from "lucide-react";
@@ -28,9 +28,9 @@ export default function BusinessSettingsDialog({ onClose }: Props) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Show modal on mount
-  useState(() => {
+  useEffect(() => {
     ref.current?.showModal();
-  });
+  }, []);
 
   function flash(msg: string) {
     setToast(msg);

@@ -1,7 +1,7 @@
 // components/Dashboard.tsx
 "use client";
 
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import type { Transaction, Expense } from "@/lib/types";
 import { fmt2, group, naira, kg, trunc2 } from "@/lib/precision";
 import { BarChart, TrendingUp, TrendingDown, DollarSign, X, Calendar } from "lucide-react";
@@ -46,9 +46,9 @@ export default function Dashboard({ transactions, expenses, costPricePerKg, onCl
   const ref = useRef<HTMLDialogElement>(null);
   const [period, setPeriod] = useState<Period>("7d");
 
-  useState(() => {
+  useEffect(() => {
     ref.current?.showModal();
-  });
+  }, []);
 
   const now = Date.now();
   const periodCutoff = useMemo(() => {
