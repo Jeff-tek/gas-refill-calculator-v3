@@ -15,6 +15,10 @@ import {
   CheckCircle,
   Sun,
   Moon,
+  BarChart,
+  Settings,
+  Database,
+  Receipt,
 } from "lucide-react";
 import { fmt2, group, naira, kg, parseField } from "@/lib/precision";
 import {
@@ -24,8 +28,22 @@ import {
   saveGsp,
   loadBottles,
   saveBottles,
+  loadExpenses,
+  loadCostPrice,
+  loadSettings,
 } from "@/lib/storage";
-import type { Bottle, FillMode, PaymentMethod, Transaction } from "@/lib/types";
+import type {
+  Bottle,
+  Expense,
+  FillMode,
+  PaymentMethod,
+  Transaction,
+  BusinessSettings,
+} from "@/lib/types";
+import Dashboard from "@/components/Dashboard";
+import BusinessSettingsDialog from "@/components/BusinessSettings";
+import ExpenseTracker from "@/components/ExpenseTracker";
+import DataManagement from "@/components/DataManagement";
 
 const GSP_DEFAULT = "1700";
 
@@ -111,6 +129,15 @@ export default function Home() {
   const [bottles, setBottles] = useState<Bottle[]>([]);
   const [newBottleName, setNewBottleName] = useState("");
   const [bottleCapacity, setBottleCapacity] = useState("55");
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [costPricePerKg, setCostPricePerKg] = useState(0);
+  const [bizSettings, setBizSettings] = useState<BusinessSettings | null>(null);
+
+  /* Dialog visibility */
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showExpenses, setShowExpenses] = useState(false);
+  const [showDataMgmt, setShowDataMgmt] = useState(false);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const payDialogRef = useRef<HTMLDialogElement>(null);
@@ -142,6 +169,9 @@ export default function Home() {
     } else {
       setBottles(saved);
     }
+    setExpenses(loadExpenses());
+    setCostPricePerKg(parseFloat(loadCostPrice("0")) || 0);
+    setBizSettings(loadSettings());
   }, []);
 
   /* persist GSP whenever it is a valid positive number */
@@ -257,6 +287,7 @@ export default function Home() {
       cost: mode === "B" ? calc.cost : undefined,
       paymentMethod: method,
       bottleId: activeBottle.id,
+      costPricePerKg: costPricePerKg > 0 ? costPricePerKg : undefined,
     };
     const next = [t, ...history];
     setHistory(next);
@@ -514,9 +545,23 @@ export default function Home() {
             </div>
           </div>
         )}
-        <button className="theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
+        <div className="mast-actions">
+          <button className="tool-btn" onClick={() => setShowDashboard(true)} title="Dashboard & Analytics">
+            <BarChart size={15} />
+          </button>
+          <button className="tool-btn" onClick={() => setShowExpenses(true)} title="Expenses">
+            <Receipt size={15} />
+          </button>
+          <button className="tool-btn" onClick={() => setShowDataMgmt(true)} title="Data Management">
+            <Database size={15} />
+          </button>
+          <button className="tool-btn" onClick={() => setShowSettings(true)} title="Business Settings">
+            <Settings size={15} />
+          </button>
+          <button className="theme-toggle" onClick={toggleTheme} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+        </div>
       </header>
 
       <main>
@@ -893,6 +938,39 @@ export default function Home() {
           </div>
         </div>
       </dialog>
+
+      {/* Business Feature Dialogs */}
+      {showDashboard && (
+        <Dashboard
+          transactions={history}
+          expenses={expenses}
+          costPricePerKg={costPricePerKg}
+          onClose={() => setShowDashboard(false)}
+        />
+      )}
+      {showSettings && (
+        <BusinessSettingsDialog onClose={() => {
+          setShowSettings(false);
+          setCostPricePerKg(parseFloat(loadCostPrice("0")) || 0);
+          setBizSettings(loadSettings());
+        }} />
+      )}
+      {showExpenses && (
+        <ExpenseTracker onClose={() => {
+          setShowExpenses(false);
+          setExpenses(loadExpenses());
+        }} />
+      )}
+      {showDataMgmt && (
+        <DataManagement
+          onClose={() => setShowDataMgmt(false)}
+          onDataChanged={() => {
+            setHistory(loadHistory());
+            setBottles(loadBottles());
+            setExpenses(loadExpenses());
+          }}
+        />
+      )}
 
       <div className={"toast" + (toast ? " show" : "")}>
         <CheckCircle size={15} />
