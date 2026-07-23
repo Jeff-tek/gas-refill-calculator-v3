@@ -515,3 +515,19 @@ dialog::backdrop{background:var(--backdrop);backdrop-filter:blur(2px)}
   .receipt{border:none;box-shadow:none;background:#fff;color:#111}
   .receipt .rc-top .big, .rc-row .v, .receipt .rc-top .k, .rc-row .k{color:#111 !important;text-shadow:none}
 }
+
+/* ══════════════════════════════════════════════════
+   PWA Install Prompt
+   ══════════════════════════════════════════════════ */
+.pwa-prompt{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:var(--sp-3);animation:slideUp .34s var(--ease)}
+@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+.pwa-prompt-content{max-width:400px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:var(--rv-rounded-md);padding:var(--sp-4);display:flex;align-items:center;gap:var(--sp-3);box-shadow:0 10px 40px -12px oklch(0 0 0 / 0.6);backdrop-filter:blur(12px)}
+.pwa-prompt-icon{flex-shrink:0}
+.pwa-prompt-text{flex:1;min-width:0}
+.pwa-prompt-text strong{display:block;font-size:0.75rem;color:var(--cream);letter-spacing:0.04em}
+.pwa-prompt-text span{display:block;font-size:0.6rem;color:var(--faint);letter-spacing:0.04em;margin-top:1px}
+.pwa-prompt-actions{display:flex;align-items:center;gap:var(--sp-2);flex-shrink:0}
+.pwa-prompt-install{background:linear-gradient(180deg,var(--flame),var(--flame-dim));border:none;border-radius:var(--rv-rounded-full);color:var(--on-btn);font-family:inherit;font-size:0.68rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:var(--sp-2) var(--sp-4);cursor:pointer;transition:filter .16s;white-space:nowrap}
+.pwa-prompt-install:hover{filter:brightness(1.1)}
+.pwa-prompt-dismiss{background:transparent;border:none;color:var(--faint);font-size:1.2rem;cursor:pointer;padding:var(--sp-1);line-height:1;transition:color .16s;display:grid;place-items:center}
+.pwa-prompt-dismiss:hover{color:var(--cream)}
