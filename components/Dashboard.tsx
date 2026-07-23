@@ -3,8 +3,8 @@
 
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { Transaction, Expense } from "@/lib/types";
-import { fmt2, group, naira, kg, trunc2 } from "@/lib/precision";
-import { BarChart, TrendingUp, TrendingDown, DollarSign, X, Calendar } from "lucide-react";
+import { naira, kg } from "@/lib/precision";
+import { BarChart, X } from "lucide-react";
 
 interface Props {
   transactions: Transaction[];
@@ -15,29 +15,6 @@ interface Props {
 
 type Period = "7d" | "30d" | "90d" | "all";
 
-function formatDateFull(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, {
-    weekday: "short", month: "short", day: "2-digit", year: "numeric",
-  });
-}
-
-function dayKey(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-function weekKey(ts: number): string {
-  const d = new Date(ts);
-  const start = new Date(d);
-  start.setDate(d.getDate() - d.getDay());
-  return `${start.getFullYear()}-${start.getMonth() + 1}-${start.getDate()}`;
-}
-
-function monthKey(ts: number): string {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${d.getMonth() + 1}`;
-}
-
 function revenueOf(t: Transaction): number {
   return t.mode === "A" ? t.input : (t.cost ?? t.input * t.gsp);
 }
@@ -46,11 +23,19 @@ export default function Dashboard({ transactions, expenses, costPricePerKg, onCl
   const ref = useRef<HTMLDialogElement>(null);
   const [period, setPeriod] = useState<Period>("7d");
 
+  /** Stable midnight-aligned reference for period filtering.
+   *  Initialized once on mount so period boundaries are clean
+   *  day-level cutoffs that don't drift on re-render. */
+  const [now] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  });
+
   useEffect(() => {
     ref.current?.showModal();
   }, []);
 
-  const now = Date.now();
   const periodCutoff = useMemo(() => {
     if (period === "all") return 0;
     const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
@@ -104,35 +89,6 @@ export default function Dashboard({ transactions, expenses, costPricePerKg, onCl
       avgRevenuePerFill: fillCount > 0 ? totalRev / fillCount : 0,
     };
   }, [filteredTxs, filteredExpenses, costPricePerKg]);
-
-  /* Daily trend data for bar chart */
-  const dailyData = useMemo(() => {
-    const byDay: Record<string, { kg: number; rev: number; count: number }> = {};
-    filteredTxs.forEach((t) => {
-      const k = dayKey(t.ts);
-      if (!byDay[k]) byDay[k] = { kg: 0, rev: 0, count: 0 };
-      byDay[k].kg += t.filledKg;
-      byDay[k].rev += revenueOf(t);
-      byDay[k].count++;
-    });
-    return Object.entries(byDay)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-14); // last 14 days
-  }, [filteredTxs]);
-
-  /* Weekly data */
-  const weeklyData = useMemo(() => {
-    const byWeek: Record<string, { kg: number; rev: number }> = {};
-    filteredTxs.forEach((t) => {
-      const k = weekKey(t.ts);
-      if (!byWeek[k]) byWeek[k] = { kg: 0, rev: 0 };
-      byWeek[k].kg += t.filledKg;
-      byWeek[k].rev += revenueOf(t);
-    });
-    return Object.entries(byWeek).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredTxs]);
-
-  const maxDailyKg = Math.max(...dailyData.map(([, d]) => d.kg), 1);
 
   function handleClose() {
     ref.current?.close();
@@ -218,26 +174,6 @@ export default function Dashboard({ transactions, expenses, costPricePerKg, onCl
             <span>{naira(stats.transferRev)}</span>
           </div>
         </div>
-
-        {/* Daily Bar Chart */}
-        {dailyData.length > 0 && (
-          <div className="dash-chart">
-            <div className="dash-chart-title">Daily Sales (kg)</div>
-            <div className="dash-bars">
-              {dailyData.map(([day, data]) => {
-                const pct = (data.kg / maxDailyKg) * 100;
-                return (
-                  <div className="dash-bar-col" key={day} title={`${day}: ${kg(data.kg)} kg, ${naira(data.rev)}`}>
-                    <div className="dash-bar" style={{ height: `${Math.max(pct, 4)}%` }} />
-                    <span className="dash-bar-label">
-                      {new Date(day + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" })}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Expenses Summary */}
         {filteredExpenses.length > 0 && (
