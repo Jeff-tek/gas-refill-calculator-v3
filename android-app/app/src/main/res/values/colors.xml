@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="dark_bg">#000000</color>
+    <color name="dark_panel">#16181A</color>
+    <color name="accent_flame">#494FDF</color>
+    <color name="accent_amber">#B09000</color>
+    <color name="cream">#FFFFFF</color>
+    <color name="muted">#505A63</color>
+</resources>

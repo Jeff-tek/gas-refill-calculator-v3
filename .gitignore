@@ -17,6 +17,15 @@
 .DS_Store
 *.pem
 
+# android
+android-app/.gradle/
+android-app/app/build/
+android-app/local.properties
+*.apk
+*.keystore
+*.aab
+*.jks
+
 # debug
 npm-debug.log*
 yarn-debug.log*
